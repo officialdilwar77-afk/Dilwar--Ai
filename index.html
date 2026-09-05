@@ -145,8 +145,8 @@ function sendMessage(){
 
   window[callbackName] = function(data){
 
-    if(data && data.text){
-      addMessage(data.text, "bot");
+    if(data && data.answer){
+      addMessage(data.answer, "bot");
     }
     else if(data && data.error){
       addMessage("❌ Error: " + data.error, "bot");
