@@ -1,193 +1,142 @@
-<!DOCTYPE html>
-<html lang="hi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dilwar AI</title>
+function doGet(e) {
+  var message = e.parameter.message || "";
+  var callback = e.parameter.callback || "";
 
-<style>
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:Arial,sans-serif;
-  background:#f5f7fb;
-  height:100vh;
-}
-.header{
-  background:#111827;
-  color:white;
-  padding:18px;
-  text-align:center;
-  font-size:24px;
-  font-weight:bold;
-}
-.sub{
-  font-size:13px;
-  font-weight:normal;
-  margin-top:5px;
-  opacity:.8;
-}
-.chat{
-  height:calc(100vh - 140px);
-  overflow-y:auto;
-  padding:15px;
-  max-width:800px;
-  margin:auto;
-}
-.message{
-  padding:12px 15px;
-  margin:10px 0;
-  border-radius:15px;
-  max-width:85%;
-  line-height:1.5;
-  white-space:pre-wrap;
-}
-.bot{
-  background:white;
-  border:1px solid #ddd;
-  margin-right:auto;
-}
-.user{
-  background:#111827;
-  color:white;
-  margin-left:auto;
-}
-.input-area{
-  position:fixed;
-  bottom:0;
-  left:0;
-  right:0;
-  background:white;
-  padding:10px;
-  border-top:1px solid #ddd;
-  display:flex;
-  gap:8px;
-  max-width:800px;
-  margin:auto;
-}
-input{
-  flex:1;
-  padding:14px;
-  border:1px solid #ccc;
-  border-radius:25px;
-  font-size:16px;
-  outline:none;
-}
-button{
-  border:0;
-  border-radius:25px;
-  padding:0 20px;
-  background:#111827;
-  color:white;
-  font-size:16px;
-}
-button:disabled{
-  opacity:.5;
-}
-</style>
-</head>
-
-<body>
-
-<div class="header">
-  🤖 Dilwar AI
-  <div class="sub">Your Personal AI Assistant</div>
-</div>
-
-<div class="chat" id="chat">
-  <div class="message bot">
-    नमस्ते! 👋 मैं Dilwar AI हूँ। आप मुझसे कुछ भी पूछ सकते हैं।
-  </div>
-</div>
-
-<div class="input-area">
-  <input
-    id="message"
-    placeholder="अपना सवाल लिखें..."
-    onkeydown="if(event.key==='Enter') sendMessage()"
-  >
-  <button id="sendBtn" onclick="sendMessage()">Send</button>
-</div>
-
-<script>
-
-// ⚠️ यहाँ अपना Apps Script Web App URL डालें
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzhiXkZG-gmbWLgTskjnRT2oxMUgmIe9T__9DnAiae9gub8p-oZaOhUB1xlOAybM7U/exec";
-
-function addMessage(text, type){
-  const chat = document.getElementById("chat");
-
-  const div = document.createElement("div");
-  div.className = "message " + type;
-  div.innerText = text;
-
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-function sendMessage(){
-
-  const input = document.getElementById("message");
-  const button = document.getElementById("sendBtn");
-
-  const text = input.value.trim();
-
-  if(!text) return;
-
-  addMessage(text, "user");
-
-  input.value = "";
-  button.disabled = true;
-  button.innerText = "⏳";
-
-  const callbackName =
-    "dilwarCallback_" + Date.now();
-
-  window[callbackName] = function(data){
-
-    if(data && data.answer){
-      addMessage(data.answer, "bot");
-    }
-    else if(data && data.error){
-      addMessage("❌ Error: " + data.error, "bot");
-    }
-    else{
-      addMessage("❌ कोई जवाब नहीं मिला।", "bot");
-    }
-
-    button.disabled = false;
-    button.innerText = "Send";
-
-    delete window[callbackName];
-    script.remove();
-  };
-
-  const script = document.createElement("script");
-
-  script.src =
-    BACKEND_URL +
-    "?message=" +
-    encodeURIComponent(text) +
-    "&callback=" +
-    callbackName;
-
-  script.onerror = function(){
-
-    addMessage(
-      "❌ Backend से connection नहीं हो पाया।",
-      "bot"
+  if (message === "") {
+    return response(
+      { error: "Message is required" },
+      callback
     );
+  }
 
-    button.disabled = false;
-    button.innerText = "Send";
+  var key = PropertiesService
+    .getScriptProperties()
+    .getProperty("GEMINI_API_KEY");
 
-    delete window[callbackName];
-    script.remove();
-  };
+  if (!key) {
+    return response(
+      { error: "API key not configured" },
+      callback
+    );
+  }
 
-  document.body.appendChild(script);
+  // Automatic fallback models
+  var models = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite"
+  ];
+
+  var lastError = "";
+
+  for (var i = 0; i < models.length; i++) {
+
+    var model = models[i];
+
+    var url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      model +
+      ":generateContent";
+
+    var data = {
+      contents: [
+        {
+          parts: [
+            {
+              text: message
+            }
+          ]
+        }
+      ]
+    };
+
+    try {
+
+      var result = UrlFetchApp.fetch(url, {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "x-goog-api-key": key
+        },
+        payload: JSON.stringify(data),
+        muteHttpExceptions: true
+      });
+
+      var status = result.getResponseCode();
+      var text = result.getContentText();
+      var json = JSON.parse(text);
+
+      // Success
+      if (
+        status >= 200 &&
+        status < 300 &&
+        json.candidates &&
+        json.candidates[0] &&
+        json.candidates[0].content &&
+        json.candidates[0].content.parts &&
+        json.candidates[0].content.parts[0]
+      ) {
+
+        var answer =
+          json.candidates[0].content.parts[0].text;
+
+        return response(
+          {
+            answer: answer,
+            model: model
+          },
+          callback
+        );
+      }
+
+      // Model failed — try next model
+      if (json.error) {
+        lastError = json.error.message;
+      } else {
+        lastError = "HTTP " + status;
+      }
+
+    } catch (err) {
+
+      lastError = err.toString();
+
+    }
+  }
+
+  // All models failed
+  return response(
+    {
+      error:
+        "All Gemini models are temporarily unavailable. Please try again later. Last error: " +
+        lastError
+    },
+    callback
+  );
 }
-</script>
 
-</body>
-</html>
+
+function response(data, callback) {
+
+  var text = JSON.stringify(data);
+
+  if (callback) {
+
+    return ContentService
+      .createTextOutput(
+        callback + "(" + text + ")"
+      )
+      .setMimeType(
+        ContentService.MimeType.JAVASCRIPT
+      );
+
+  }
+
+  return ContentService
+    .createTextOutput(text)
+    .setMimeType(
+      ContentService.MimeType.JSON
+    );
+}
